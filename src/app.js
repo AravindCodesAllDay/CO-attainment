@@ -5,7 +5,9 @@ const cors = require("cors");
 const AttainmentRoutes = require("./routes/attainment.routes");
 const CourseRoutes = require("./routes/course.routes");
 const PtRoutes = require("./routes/pt.routes");
+const SaaRoutes = require("./routes/saa.routes");
 const StudentRoutes = require("./routes/student.routes");
+const UserRoutes = require("./routes/user.routes");
 
 const app = express();
 
@@ -18,7 +20,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/attainment", AttainmentRoutes);
 app.use("/course", CourseRoutes);
 app.use("/pt", PtRoutes);
+app.use("/saa", SaaRoutes);
 app.use("/student", StudentRoutes);
+app.use("/user", UserRoutes);
 
 // Load environment variables
 if (process.env.NODE_ENV !== "production") {
