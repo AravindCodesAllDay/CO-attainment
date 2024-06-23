@@ -2,9 +2,10 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 
-const AttainmentRoutes = require("./routes/co_attainment");
-const CourseRoutes = require("./routes/colist_marks");
-const StudentRoutes = require("./routes/students");
+const AttainmentRoutes = require("./routes/attainment.routes");
+const CourseRoutes = require("./routes/course.routes");
+const PtRoutes = require("./routes/pt.routes");
+const StudentRoutes = require("./routes/student.routes");
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use("/attainment", AttainmentRoutes);
 app.use("/course", CourseRoutes);
+app.use("/pt", PtRoutes);
 app.use("/student", StudentRoutes);
 
 // Load environment variables
