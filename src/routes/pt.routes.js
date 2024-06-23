@@ -158,7 +158,7 @@ router.post("/enter-mark/:ptListId/:studentId", async (req, res) => {
 });
 
 // Route to delete a PtList
-app.delete("/delete-ptlist/:ptListId", async (req, res) => {
+router.delete("/delete-ptlist/:ptListId", async (req, res) => {
   try {
     const ptList = await PtList.findByIdAndDelete(req.params.ptListId);
     if (!ptList) {
