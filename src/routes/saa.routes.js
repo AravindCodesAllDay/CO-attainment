@@ -1,14 +1,91 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const NameList = require("../models/namelist");
 const SAA = require("../models/saa");
 const User = require("../models/user");
 
 const router = express.Router();
 
-// POST route to create a new SAA list of students with marks
-router.post("/create-saalist", async (req, res) => {
+const handleErrorResponse = (res, status, message) => {
+  return res.status(status).json({ message });
+};
+
+const verifyUserOwnership = async (userId, listId, listType) => {
+  if (
+    !mongoose.Types.ObjectId.isValid(userId) ||
+    !mongoose.Types.ObjectId.isValid(listId)
+  ) {
+    throw new Error("Invalid user ID or list ID.");
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  if (!user[listType].includes(listId)) {
+    throw new Error("List not associated with the user.");
+  }
+};
+
+// GET route to retrieve all SAA list titles and IDs for a user
+router.get("/:userId", async (req, res) => {
   try {
-    const { title, courses, namelistId, userId } = req.body;
+    const { userId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return handleErrorResponse(res, 400, "Invalid user ID");
+    }
+
+    const user = await User.findById(userId).populate("saalists", "title _id");
+
+    if (!user) {
+      return handleErrorResponse(res, 404, "User not found");
+    }
+
+    const saalists = user.saalists;
+    res.status(200).json(saalists);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error retrieving SAA lists", error: error.message });
+  }
+});
+
+// GET route to retrieve student details for a specific SAA list
+router.get("/saalist/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { saaId } = req.body;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(userId) ||
+      !mongoose.Types.ObjectId.isValid(saaId)
+    ) {
+      return handleErrorResponse(res, 400, "Invalid user ID or SAA list ID");
+    }
+
+    await verifyUserOwnership(userId, saaId, "saalists");
+
+    const saaList = await SAA.findById(saaId);
+
+    if (!saaList) {
+      return handleErrorResponse(res, 404, "SAA list not found");
+    }
+
+    res.status(200).json(saaList.students);
+  } catch (error) {
+    res.status(500).json({
+      message: "Error retrieving student details",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/create/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { title, courses, namelistId } = req.body;
 
     if (
       !title ||
@@ -17,13 +94,14 @@ router.post("/create-saalist", async (req, res) => {
       !namelistId ||
       !userId
     ) {
-      return res.status(400).json({ message: "Invalid input data" });
+      return handleErrorResponse(res, 400, "Invalid input data");
     }
 
-    const nameList = await NameList.findById(namelistId);
+    await verifyUserOwnership(userId, namelistId, "namelists");
 
+    const nameList = await NameList.findById(namelistId);
     if (!nameList) {
-      return res.status(404).json({ message: "NameList not found" });
+      return handleErrorResponse(res, 404, "NameList not found");
     }
 
     const populatedStudents = nameList.students.map((student) => {
@@ -44,16 +122,13 @@ router.post("/create-saalist", async (req, res) => {
       students: populatedStudents,
     });
 
-    const savedSAAList = await newSAAList.save();
-
     const user = await User.findById(userId);
-
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return handleErrorResponse(res, 404, "User not found");
     }
 
+    const savedSAAList = await newSAAList.save();
     user.saalists.push(savedSAAList._id);
-
     await user.save();
 
     res.status(201).json({
@@ -67,39 +142,27 @@ router.post("/create-saalist", async (req, res) => {
   }
 });
 
-// PUT route to update the scores of a single student in an SAA list
-router.put("/student-score", async (req, res) => {
+router.put("/score/:userId", async (req, res) => {
   try {
-    const { saaId, userId, rollno, scores } = req.body;
+    const { userId } = req.params;
+    const { saaId, rollno, scores } = req.body;
 
     if (!saaId || !userId || !rollno || !scores || typeof scores !== "object") {
-      return res.status(400).json({ message: "Invalid input data" });
+      return handleErrorResponse(res, 400, "Invalid input data");
     }
 
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    if (!user.saalists.includes(saaId)) {
-      return res
-        .status(403)
-        .json({ message: "User does not have access to this SAA list" });
-    }
+    await verifyUserOwnership(userId, saaId, "saalists");
 
     const saaList = await SAA.findById(saaId);
-
     if (!saaList) {
-      return res.status(404).json({ message: "SAA list not found" });
+      return handleErrorResponse(res, 404, "SAA list not found");
     }
 
     const student = saaList.students.find(
       (student) => student.rollno === rollno
     );
-
     if (!student) {
-      return res.status(404).json({ message: "Student not found" });
+      return handleErrorResponse(res, 404, "Student not found");
     }
 
     for (let course in scores) {
@@ -109,7 +172,6 @@ router.put("/student-score", async (req, res) => {
     }
 
     const updatedSAAList = await saaList.save();
-
     res.status(200).json({
       message: "Student scores updated successfully",
       saaList: updatedSAAList,
@@ -121,39 +183,28 @@ router.put("/student-score", async (req, res) => {
   }
 });
 
-// DELETE route to delete an SAA list
-router.delete("/delete-saa/:saaId/:userId", async (req, res) => {
+router.delete("/delete/:userId", async (req, res) => {
   try {
-    const { saaId, userId } = req.params;
+    const { userId } = req.params;
+    const { saaId } = req.body;
 
     if (!saaId || !userId) {
-      return res.status(400).json({ message: "Invalid input data" });
+      return handleErrorResponse(res, 400, "Invalid input data");
     }
 
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    if (!user.saalists.includes(saaId)) {
-      return res
-        .status(403)
-        .json({ message: "User does not have access to delete this SAA list" });
-    }
+    await verifyUserOwnership(userId, saaId, "saalists");
 
     const saaList = await SAA.findById(saaId);
-
     if (!saaList) {
-      return res.status(404).json({ message: "SAA list not found" });
+      return handleErrorResponse(res, 404, "SAA list not found");
     }
 
     await saaList.remove();
 
+    const user = await User.findById(userId);
     user.saalists = user.saalists.filter(
       (listId) => listId.toString() !== saaId
     );
-
     await user.save();
 
     res.status(200).json({ message: "SAA list deleted successfully" });

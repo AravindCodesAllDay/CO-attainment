@@ -2,7 +2,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 
-const AttainmentRoutes = require("./routes/attainment.routes");
 const CourseRoutes = require("./routes/course.routes");
 const PtRoutes = require("./routes/pt.routes");
 const SaaRoutes = require("./routes/saa.routes");
@@ -17,7 +16,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use("/attainment", AttainmentRoutes);
 app.use("/course", CourseRoutes);
 app.use("/pt", PtRoutes);
 app.use("/saa", SaaRoutes);

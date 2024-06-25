@@ -8,10 +8,16 @@ const userSchema = new Schema(
       required: true,
       unique: true,
     },
-    namelist: [
+    namelists: [
       {
         type: Schema.Types.ObjectId,
         ref: "NameList",
+      },
+    ],
+    courselists: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "COlist",
       },
     ],
     ptlists: [

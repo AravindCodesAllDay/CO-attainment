@@ -24,9 +24,9 @@ const verifyToken = (req, res, next) => {
 };
 
 // POST route for user login or creation
-router.post("/login", async (req, res) => {
+router.post("/:email", async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email } = req.params;
 
     if (!email) {
       return res.status(400).json({ message: "Invalid input data" });

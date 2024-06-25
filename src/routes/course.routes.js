@@ -1,64 +1,79 @@
-// routes/colist.js
 const express = require("express");
 const COlist = require("../models/colist");
 const NameList = require("../models/namelist");
+const User = require("../models/user");
 
 const router = express.Router();
 
-// Route to get all co lists
-router.get("/", async (req, res) => {
+// Helper function to verify user ownership of COlist
+const verifyUserOwnership = async (userId, coId) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  if (!user.courselists.includes(coId)) {
+    throw new Error("User does not have access to this CO list");
+  }
+};
+
+// GET route to retrieve all COlist titles and IDs for a user
+router.get("/:userId", async (req, res) => {
   try {
-    const colists = await COlist.find({});
-    return res.status(200).json(colists);
-  } catch (error) {
-    console.error(error.message);
-    return res.status(500).json({ message: "Internal Server Error" });
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).send("Invalid user ID");
+    }
+
+    const user = await User.findById(userId).populate(
+      "courselists",
+      "title _id"
+    );
+
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    res.status(200).json(user.courselists);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
   }
 });
 
-// Route to get all co list titles and their IDs
-router.get("/colists", async (req, res) => {
+// GET route to retrieve student details for a specific COlist
+router.get("/colist/:userId", async (req, res) => {
   try {
-    const colists = await COlist.find({}).select("title _id");
-    return res.status(200).json(colists);
-  } catch (error) {
-    console.error(error.message);
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
+    const { userId } = req.params;
+    const { coId } = req.body;
 
-// Route to get students mark by name list id
-router.get("/studentsmark", async (req, res) => {
-  try {
-    const { _id } = req.query;
-
-    if (!_id) {
-      return res.status(400).json({
-        message: "All required fields must be provided.",
-      });
+    if (!userId || !coId) {
+      return res.status(400).send("Invalid user ID or COlist ID");
     }
 
-    const colist = await COlist.findOne({ _id: _id });
+    await verifyUserOwnership(userId, coId);
 
-    if (!colist) {
-      return res.status(404).json({
-        message: "Name list with the specified title not found.",
-      });
+    const coList = await COlist.findById(coId);
+
+    if (!coList) {
+      return res.status(404).send("COlist not found");
     }
 
-    return res.status(200).json(colist.students);
-  } catch (error) {
-    console.error(error.message);
-    return res.status(500).json({ message: "Internal Server Error" });
+    res.status(200).json(coList.students);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
   }
 });
 
 // Route to create a new COlist based on an existing NameList
-router.post("/addcolist", async (req, res) => {
+router.post("/create/:userId", async (req, res) => {
   try {
+    const { userId } = req.params;
     const { title, namelist_id, rows } = req.body;
 
-    if (!title || !Array.isArray(rows) || !namelist_id) {
+    if (!title || !Array.isArray(rows) || !namelist_id || !userId) {
       return res.status(400).json({ message: "All fields must be provided." });
     }
 
@@ -66,6 +81,12 @@ router.post("/addcolist", async (req, res) => {
 
     if (!namelist) {
       return res.status(404).json({ message: "NameList not found." });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
 
     const students = namelist.students.map((student) => {
@@ -88,6 +109,8 @@ router.post("/addcolist", async (req, res) => {
     });
 
     await newList.save();
+    user.courselists.push(newList._id);
+    await user.save();
 
     return res.status(201).json(newList);
   } catch (error) {
@@ -97,16 +120,23 @@ router.post("/addcolist", async (req, res) => {
 });
 
 // Add or Update Student Score
-router.post("/:id/student/:rollno/scores", async (req, res) => {
+router.put("/score/:userId", async (req, res) => {
   try {
-    const { id, rollno } = req.params;
-    const { assignment, score } = req.body;
-    const course = await COlist.findById(id);
-    if (!course) {
-      return res.status(404).json({ error: "Course not found" });
+    const { userId } = req.params;
+    const { assignment, score, coId, rollno } = req.body;
+
+    if (!coId || !userId || !assignment || score === undefined) {
+      return res.status(400).json({ message: "Invalid input data" });
     }
 
-    const student = course.students.find(
+    await verifyUserOwnership(userId, coId);
+
+    const coList = await COlist.findById(coId);
+    if (!coList) {
+      return res.status(404).json({ error: "COlist not found" });
+    }
+
+    const student = coList.students.find(
       (student) => student.rollno === rollno
     );
     if (!student) {
@@ -114,23 +144,42 @@ router.post("/:id/student/:rollno/scores", async (req, res) => {
     }
 
     student.scores.set(assignment, score);
-    await course.save();
-    res.status(200).json(course);
+    await coList.save();
+    res.status(200).json(coList);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error(error.message);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-// Delete Course by ID
-router.delete("/courses/:id", async (req, res) => {
+// Delete COlist by ID
+router.delete("/delete/:userId", async (req, res) => {
   try {
-    const course = await COlist.findByIdAndDelete(req.params.id);
-    if (!course) {
-      return res.status(404).json({ error: "Course not found" });
+    const { userId } = req.params;
+    const { coId } = req.body;
+
+    if (!coId || !userId) {
+      return res.status(400).json({ message: "Invalid input data" });
     }
-    res.status(200).json({ message: "Course deleted successfully" });
+
+    await verifyUserOwnership(userId, coId);
+
+    const coList = await COlist.findByIdAndDelete(coId);
+
+    if (!coList) {
+      return res.status(404).json({ message: "COlist not found" });
+    }
+
+    const user = await User.findById(userId);
+    user.courselists = user.courselists.filter(
+      (listId) => listId.toString() !== coId
+    );
+    await user.save();
+
+    res.status(200).json({ message: "COlist deleted successfully" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(error.message);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 });
 

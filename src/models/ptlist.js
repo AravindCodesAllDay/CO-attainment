@@ -62,6 +62,10 @@ const ptListSchema = new Schema(
       type: Number,
       default: 0,
     },
+    maxMark: {
+      type: Number,
+      required: true,
+    },
     students: [studentSchema],
   },
   {

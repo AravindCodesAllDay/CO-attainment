@@ -2,40 +2,9 @@ const express = require("express");
 
 const PtList = require("../models/ptlist");
 const NameList = require("../models/namelist");
+const User = require("../models/user");
 
 const router = express.Router();
-
-// sample schema
-// {
-//   "nameListId": "667512e6f23057d5f66a2c7c",
-//   "title": "Your PT List Title",
-//   "parts": [
-//     {
-//       "title": "Part 1",
-//       "maxmark": 10,
-//       "questions": [
-//         { "number": 1, "type": "understand" },
-//         { "number": 2, "type": "understand" }
-//       ]
-//     },
-//     {
-//       "title": "Part 2",
-//       "maxmark": 15,
-//       "questions": [
-//         { "number": 1, "type": "analyse" },
-//         { "number": 2, "type": "understand" }
-//       ]
-//     },
-//     {
-//       "title": "Part 3",
-//       "maxmark": 5,
-//       "questions": [
-//         { "number": 1, "type": "understand" },
-//         { "number": 2, "type": "analyse" }
-//       ]
-//     }
-//   ]
-// }
 
 // Helper function to calculate average mark
 const calculateAverageMark = (students) => {
@@ -46,12 +15,72 @@ const calculateAverageMark = (students) => {
   return students.length ? totalMarks / students.length : 0;
 };
 
-// Route to create a table of students from the NameList with user-defined parts
-router.post("/create-ptlist", async (req, res) => {
-  try {
-    const { nameListId, title, parts } = req.body;
+// Middleware to verify user ownership of PtList
+const verifyUserOwnership = async (userId, ptListId) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
 
-    if (!nameListId || !title || !parts) {
+  if (!user.ptlists.includes(ptListId)) {
+    throw new Error("User does not have access to this PT list");
+  }
+};
+
+// GET route to retrieve all PtList titles and IDs for a user
+router.get("/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).send("Invalid user ID");
+    }
+
+    const user = await User.findById(userId).populate("ptlists", "title _id");
+
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    res.status(200).json(user.ptlists);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
+// GET route to retrieve student details for a specific PtList
+router.get("/ptlist/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { ptListId } = req.body;
+
+    if (!userId || !ptListId) {
+      return res.status(400).send("Invalid user ID or PtList ID");
+    }
+
+    await verifyUserOwnership(userId, ptListId);
+
+    const ptList = await PtList.findById(ptListId);
+
+    if (!ptList) {
+      return res.status(404).send("PtList not found");
+    }
+
+    res.status(200).json(ptList.students);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
+// Route to create a table of students from the NameList with user-defined parts
+router.post("/create/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { nameListId, title, parts, maxMark } = req.body;
+
+    if (!nameListId || !title || !parts || !maxMark || !userId) {
       return res.status(400).send("Missing required fields");
     }
 
@@ -92,9 +121,19 @@ router.post("/create-ptlist", async (req, res) => {
       title: title,
       students: students,
       averagemark: averagemark,
+      maxMark: maxMark,
     });
 
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     await ptList.save();
+    user.ptlists.push(ptList._id);
+
+    await user.save();
+
     res.status(201).send(ptList);
   } catch (err) {
     console.error(err);
@@ -103,22 +142,32 @@ router.post("/create-ptlist", async (req, res) => {
 });
 
 // Route to enter marks for a question
-router.post("/enter-mark/:ptListId/:studentId", async (req, res) => {
+router.put("/score/:userId", async (req, res) => {
   try {
-    const ptList = await PtList.findById(req.params.ptListId);
+    const { partTitle, questionNumber, mark, ptListId, studentId } = req.body;
+    const { userId } = req.params;
+
+    if (
+      !ptListId ||
+      !userId ||
+      !studentId ||
+      !questionNumber ||
+      !partTitle ||
+      typeof mark !== "number"
+    ) {
+      return res.status(400).json({ message: "Invalid input data" });
+    }
+
+    await verifyUserOwnership(userId, ptListId);
+
+    const ptList = await PtList.findById(ptListId);
     if (!ptList) {
       return res.status(404).send("PtList not found");
     }
 
-    const student = ptList.students.id(req.params.studentId);
+    const student = ptList.students.id(studentId);
     if (!student) {
       return res.status(404).send("Student not found");
-    }
-
-    const { partTitle, questionNumber, mark } = req.body;
-
-    if (typeof mark !== "number") {
-      return res.status(400).send("Invalid mark value");
     }
 
     let part = student.parts.find((p) => p.title === partTitle);
@@ -158,12 +207,30 @@ router.post("/enter-mark/:ptListId/:studentId", async (req, res) => {
 });
 
 // Route to delete a PtList
-router.delete("/delete-ptlist/:ptListId", async (req, res) => {
+router.delete("/delete/:userId", async (req, res) => {
   try {
-    const ptList = await PtList.findByIdAndDelete(req.params.ptListId);
+    const { userId } = req.params;
+    const { ptListId } = req.body;
+
+    if (!ptListId || !userId) {
+      return res.status(400).json({ message: "Invalid input data" });
+    }
+
+    await verifyUserOwnership(userId, ptListId);
+
+    const ptList = await PtList.findByIdAndDelete(ptListId);
+
     if (!ptList) {
       return res.status(404).send("PtList not found");
     }
+
+    const user = await User.findById(userId);
+    user.ptlists = user.ptlists.filter(
+      (listId) => listId.toString() !== ptListId
+    );
+
+    await user.save();
+
     res.status(200).send({ message: "PtList deleted successfully" });
   } catch (err) {
     console.error(err);
