@@ -47,10 +47,9 @@ router.get("/namelists/:userId", async (req, res) => {
   }
 });
 
-router.get("/students/:userId", async (req, res) => {
+router.get("/students/:namelistId/:userId", async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { namelistId } = req.body;
+    const { userId, namelistId } = req.params;
 
     await verifyUserOwnership(userId, namelistId, "namelists");
 

@@ -43,10 +43,9 @@ router.get("/:userId", async (req, res) => {
 });
 
 // GET route to retrieve student details for a specific COlist
-router.get("/colist/:userId", async (req, res) => {
+router.get("/colist/:coId/:userId", async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { coId } = req.body;
+    const { userId, coId } = req.params;
 
     if (!userId || !coId) {
       return res.status(400).send("Invalid user ID or COlist ID");

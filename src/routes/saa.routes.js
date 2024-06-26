@@ -53,10 +53,9 @@ router.get("/:userId", async (req, res) => {
 });
 
 // GET route to retrieve student details for a specific SAA list
-router.get("/saalist/:userId", async (req, res) => {
+router.get("/saalist/:saaId/:userId", async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { saaId } = req.body;
+    const { userId, saaId } = req.params;
 
     if (
       !mongoose.Types.ObjectId.isValid(userId) ||

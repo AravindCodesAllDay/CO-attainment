@@ -50,10 +50,9 @@ router.get("/:userId", async (req, res) => {
 });
 
 // GET route to retrieve student details for a specific PtList
-router.get("/ptlist/:userId", async (req, res) => {
+router.get("/ptlist/:ptListId/:userId", async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { ptListId } = req.body;
+    const { userId, ptListId } = req.params;
 
     if (!userId || !ptListId) {
       return res.status(400).send("Invalid user ID or PtList ID");
