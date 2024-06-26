@@ -39,12 +39,16 @@ router.post("/:email", async (req, res) => {
       user = await newUser.save();
     }
 
-    // Generate JWT token
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+    // Generate token
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
-    res.status(200).json({ message: "Login successful", token });
+    // Send response
+    res.status(200).send({
+      token: token,
+      userId: user._id,
+    });
   } catch (error) {
     res.status(500).json({ message: "Error logging in", error: error.message });
   }
