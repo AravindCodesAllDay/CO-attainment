@@ -72,7 +72,7 @@ router.get("/saalist/:saaId/:userId", async (req, res) => {
       return handleErrorResponse(res, 404, "SAA list not found");
     }
 
-    res.status(200).json(saaList.students);
+    res.status(200).json(saaList);
   } catch (error) {
     res.status(500).json({
       message: "Error retrieving student details",

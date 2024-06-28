@@ -58,7 +58,7 @@ router.get("/students/:namelistId/:userId", async (req, res) => {
       return handleErrorResponse(res, 404, "Name list not found.");
     }
 
-    return res.status(200).json(namelist.students);
+    return res.status(200).json(namelist);
   } catch (error) {
     console.error(error.message);
     return handleErrorResponse(res, 500, error.message);

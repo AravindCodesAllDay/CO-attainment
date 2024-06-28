@@ -66,7 +66,7 @@ router.get("/ptlist/:ptListId/:userId", async (req, res) => {
       return res.status(404).send("PtList not found");
     }
 
-    res.status(200).json(ptList.students);
+    res.status(200).json(ptList);
   } catch (err) {
     console.error(err);
     res.status(500).send(err.message);

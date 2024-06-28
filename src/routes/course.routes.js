@@ -59,7 +59,7 @@ router.get("/colist/:coId/:userId", async (req, res) => {
       return res.status(404).send("COlist not found");
     }
 
-    res.status(200).json(coList.students);
+    res.status(200).json(coList);
   } catch (err) {
     console.error(err);
     res.status(500).send(err.message);
